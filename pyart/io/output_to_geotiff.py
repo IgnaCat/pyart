@@ -31,6 +31,7 @@ def write_grid_geotiff(
     vmax=75,
     color_levels=None,
     warp=False,
+    warp_to_mercator=False,
     sld=False,
     use_doublequotes=True,
     transparent_bg=True,
@@ -40,9 +41,10 @@ def write_grid_geotiff(
     Write a Py-ART Grid object to a GeoTIFF file.
 
     The GeoTIFF can be the standard Azimuthal Equidistant projection used
-    in Py-ART, or a lat/lon projection on a WGS84 sphere. The latter is
-    typically more usable in web mapping applications. The GeoTIFF can
-    contain a single float-point raster band, or three RGB byte raster bands.
+    in Py-ART, or a lat/lon projection on a WGS84 sphere,
+    or a Web Mercator projection. The latter is typically more usable
+    in web mapping applications. The GeoTIFF can contain a single 
+    float-point raster band, or three RGB byte raster bands.
     The former will require an SLD file for colorful display using standard
     GIS or web mapping software, while the latter will show colors
     "out-of-the-box" but lack actual data values. The function also can
@@ -87,6 +89,12 @@ def write_grid_geotiff(
                to warp to a lat/lon WGS84 grid.
 
         False - No warping will be performed. Output will be Az. Equidistant.
+    warp_to_mercator : bool, optional
+        True - Use gdalwarp (called from command line using os.system)
+               to warp to Web Mercator (EPSG:3857) grid.
+
+        False - No warping will be performed. Output will be Az. Equidistant
+                or lat/lon WGS84 depending on warp parameter.
 
     sld : bool, optional
         True - Create a Style Layer Descriptor file (SLD) mapped to vmin/vmax
@@ -194,28 +202,21 @@ def write_grid_geotiff(
     if sld:
         _create_sld(cmap, vmin, vmax, ofile, color_levels)
 
-    if warp:
-        # Warps TIFF to lat/lon WGS84 projection that is more useful
-        # for web mapping applications. Likely changes array shape.
-        if use_doublequotes:
-            os.system(
-                'gdalwarp -q -t_srs "+proj=longlat +ellps=WGS84 '
-                + '+datum=WGS84 +no_defs" '
-                + ofile
-                + " "
-                + ofile
-                + "_tmp.tif"
-            )
-        else:
-            os.system(
-                "gdalwarp -q -t_srs '+proj=longlat +ellps=WGS84 "
-                + "+datum=WGS84 +no_defs' "
-                + ofile
-                + " "
-                + ofile
-                + "_tmp.tif"
-            )
-        shutil.move(ofile + "_tmp.tif", ofile)
+    if warp or warp_to_mercator:
+        # elegimos destino CRS
+        if warp_to_mercator:
+            target_srs = "+proj=merc +a=6378137 +b=6378137 +lon_0=0 +lat_ts=0 +units=m +no_defs +type=crs"
+        else:  # caso original lat/lon WGS84
+            target_srs = "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"
+
+        tmpfile = ofile + "_tmp.tif"
+
+        quote = '"' if use_doublequotes else "'"
+        os.system(
+            f"gdalwarp -q -t_srs {quote}{target_srs}{quote} {ofile} {tmpfile}"
+        )
+
+        shutil.move(tmpfile, ofile)
 
 
 def _get_rgb_values(data, vmin, vmax, color_levels, cmap, transpbg, op):
