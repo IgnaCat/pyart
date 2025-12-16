@@ -213,7 +213,7 @@ def write_grid_geotiff(
 
         quote = '"' if use_doublequotes else "'"
         os.system(
-            f"gdalwarp -q -t_srs {quote}{target_srs}{quote} {ofile} {tmpfile}"
+            f"gdalwarp -q -srcnodata nan -dstnodata nan -t_srs {quote}{target_srs}{quote} {ofile} {tmpfile}"
         )
 
         shutil.move(tmpfile, ofile)
